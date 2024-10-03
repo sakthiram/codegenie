@@ -15,8 +15,9 @@ def load_file_contents(file_path: str) -> str:
 def get_combined_file_contents(files: List[str]) -> str:
     combined_contents = ""
     for file in files:
-        content = load_file_contents(file)
-        combined_contents += f"File: {file}\n{content}\n\n"
+        if os.path.isfile(file):
+            content = load_file_contents(file)
+            combined_contents += f"File: {file}\n{content}\n\n"
     return combined_contents
 
 def count_tokens(text: str) -> int:

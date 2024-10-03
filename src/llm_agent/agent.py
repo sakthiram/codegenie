@@ -9,7 +9,7 @@ from langchain_core.tools import ToolsRenderer, render_text_description_and_args
 from langchain.agents.format_scratchpad import format_xml
 from langchain_community.callbacks.streamlit.streamlit_callback_handler import StreamlitCallbackHandler
 
-from llm_agent.config import get_model, get_tools, AVAILABLE_MODELS
+from llm_agent.config import get_model, get_tools, AVAILABLE_MODELS, AVAILABLE_TOOLS
 from utils.file_utils import get_combined_file_contents, count_tokens, get_file_tree
 from streamlit_tree_select import tree_select
 
@@ -17,7 +17,7 @@ from streamlit_tree_select import tree_select
 class LLMAgent:
     def __init__(self, model_id, aws_profile):
         self.model = get_model(model_id, aws_profile)
-        self.tools = get_tools()
+        self.tools = get_tools(st.session_state.selected_tools)
         self.model.bind_tools(self.tools)
         self.system_prompt = self._create_system_prompt()
         self.agent = self._create_agent()
@@ -166,6 +166,8 @@ def main():
         st.session_state.messages = []
     if "folder_paths" not in st.session_state:
         st.session_state.folder_paths = []
+    if "selected_tools" not in st.session_state:
+        st.session_state.selected_tools = ['tavily_search']
 
     # Main chat interface
     st.title("🦾 CHITTI")
@@ -180,6 +182,13 @@ def main():
         # Model selection
         st.session_state.model_id = st.selectbox("Select Model", AVAILABLE_MODELS,
                                                  index=AVAILABLE_MODELS.index(st.session_state.model_id))
+
+        st.header(':wrench: Tool Selection')
+        st.session_state.selected_tools = st.multiselect(
+            'Select Tools',
+            AVAILABLE_TOOLS,
+            default=[]
+        )
 
         st.header(":file_folder: Context Selection")
 

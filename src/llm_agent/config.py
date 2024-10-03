@@ -1,13 +1,18 @@
+import getpass
+import os
 from langchain_aws import ChatBedrock
 from botocore.config import Config
 from langchain.tools import Tool
+from langchain_community.tools.tavily_search.tool import TavilySearchResults
 
 AVAILABLE_MODELS = [
+    "anthropic.claude-3-5-sonnet-20240620-v1:0",
     "anthropic.claude-3-sonnet-20240229-v1:0",
     "anthropic.claude-3-haiku-20240307-v1:0",
     "anthropic.claude-3-opus-20240229-v1:0"
 ]
 
+AVAILABLE_TOOLS = ['tavily_search']
 
 def get_model(model_id, aws_profile=None):
     return ChatBedrock(
@@ -18,5 +23,20 @@ def get_model(model_id, aws_profile=None):
     )
 
 
-def get_tools():
-    return []
+def get_tools(selected_tools):
+    tools = []
+
+    if 'tavily_search' in selected_tools:
+        if not os.environ.get('TAVILY_API_KEY'):
+            os.environ['TAVILY_API_KEY'] = getpass.getpass('Tavily API key:\n')
+
+        search_tool = TavilySearchResults(
+            max_results=5,
+            search_depth='advanced',
+            include_answer=True,
+            include_raw_content=True,
+            include_images=True,
+        )
+        tools.append(search_tool)
+
+    return tools
