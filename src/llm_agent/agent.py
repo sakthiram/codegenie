@@ -16,12 +16,27 @@ from streamlit_tree_select import tree_select
 
 class LLMAgent:
     def __init__(self, model_id, aws_profile):
-        self.model = get_model(model_id, aws_profile)
+        self.aws_profile = aws_profile
+        self.current_model_index = AVAILABLE_MODELS.index(model_id)
+        self.model = self._get_model_with_fallback()
         self.tools = get_tools(st.session_state.selected_tools)
         self.model.bind_tools(self.tools)
         self.system_prompt = self._create_system_prompt()
         self.agent = self._create_agent()
         self.agent_executor = self._create_agent_executor()
+
+    def _get_model_with_fallback(self):
+        while self.current_model_index < len(AVAILABLE_MODELS):
+            try:
+                model = get_model(AVAILABLE_MODELS[self.current_model_index], self.aws_profile)
+                return model
+            except Exception as e:
+                if 'ThrottlingException' in str(e):
+                    st.warning(f'Model {AVAILABLE_MODELS[self.current_model_index]} is throttled. Trying next model...')
+                    self.current_model_index += 1
+                else:
+                    raise e
+        raise Exception('All models are throttled. Please try again later.')
 
     def _create_system_prompt(self):
         AGENT_PROMPT = """You are an excellent coder. Help the user with their coding tasks. 
@@ -111,16 +126,30 @@ class LLMAgent:
         )
 
     def run(self, user_prompt: str, chat_history: List[Union[HumanMessage, AIMessage]], context: str):
-        agent_input = {
-            "prompt": user_prompt,
-            "chat_history": chat_history,
-            "codebase": context,
-            "agent_scratchpad": format_xml([])  # Initialize with empty scratchpad
-        }
-        st_callback = StreamlitCallbackHandler(st.container())
-        response = self.agent_executor.invoke(agent_input, {"callbacks": [st_callback]})
-        return response["output"]
-
+        while True:
+            try:
+                agent_input = {
+                    "prompt": user_prompt,
+                    "chat_history": chat_history,
+                    "codebase": context,
+                    "agent_scratchpad": format_xml([])  # Initialize with empty scratchpad
+                }
+                st_callback = StreamlitCallbackHandler(st.container())
+                response = self.agent_executor.invoke(agent_input, {"callbacks": [st_callback]})
+                return response["output"]
+            except Exception as e:
+                if 'ThrottlingException' in str(e):
+                    st.warning(f'Model {AVAILABLE_MODELS[self.current_model_index]} is throttled. Trying next model...')
+                    self.current_model_index += 1
+                    if self.current_model_index >= len(AVAILABLE_MODELS):
+                        raise Exception('All models are throttled. Please try again later.')
+                    # Get new model and recreate agent
+                    self.model = self._get_model_with_fallback()
+                    self.model.bind_tools(self.tools)
+                    self.agent = self._create_agent()
+                    self.agent_executor = self._create_agent_executor()
+                else:
+                    raise e
 
 def render_file_tree(folder_path: str) -> Dict:
     file_tree = get_file_tree(folder_path)
@@ -170,7 +199,7 @@ def main():
         st.session_state.selected_tools = ['tavily_search']
 
     # Main chat interface
-    st.title("🦾 CHITTI")
+    st.title("🐧 CHITTI")
 
     # Sidebar for settings and file selection
     with st.sidebar:
