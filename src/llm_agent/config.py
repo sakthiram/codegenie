@@ -9,11 +9,37 @@ AVAILABLE_MODELS = [
     "us.anthropic.claude-3-5-sonnet-20241022-v2:0",
     "us.anthropic.claude-3-5-haiku-20241022-v1:0",
     "anthropic.claude-3-5-sonnet-20240620-v1:0",
-    "anthropic.claude-3-5-sonnet-20240620-v1:0",
     "anthropic.claude-3-sonnet-20240229-v1:0",
     "anthropic.claude-3-haiku-20240307-v1:0",
     "anthropic.claude-3-opus-20240229-v1:0"
 ]
+
+MODEL_PRICING = {
+    "us.anthropic.claude-3-5-sonnet-20241022-v2:0": {
+        "input_cost_per_1k": 0.003,
+        "output_cost_per_1k": 0.015
+    },
+    "us.anthropic.claude-3-5-haiku-20241022-v1:0": {
+        "input_cost_per_1k": 0.001,
+        "output_cost_per_1k": 0.005
+    },
+    "anthropic.claude-3-5-sonnet-20240620-v1:0": {
+        "input_cost_per_1k": 0.003,
+        "output_cost_per_1k": 0.015
+    },
+    "anthropic.claude-3-opus-20240229-v1:0": {
+        "input_cost_per_1k": 0.015,
+        "output_cost_per_1k": 0.075
+    },
+    "anthropic.claude-3-haiku-20240307-v1:0": {
+        "input_cost_per_1k": 0.00025,
+        "output_cost_per_1k": 0.00125
+    },
+    "anthropic.claude-3-sonnet-20240229-v1:0": {
+        "input_cost_per_1k": 0.003,
+        "output_cost_per_1k": 0.015
+    }
+}
 
 AVAILABLE_TOOLS = ['tavily_search']
 
