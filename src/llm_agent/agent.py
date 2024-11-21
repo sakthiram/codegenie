@@ -108,17 +108,17 @@ class LLMAgent:
                 Then restart the Streamlit application.
                 """
                 st.error(error_message)
-                return None
-            else:
-                raise e
-        except Exception as e:
-            if 'ThrottlingException' in str(e):
+                return "ExpiredTokenException"
+            elif 'ThrottlingException' in str(e):
                 st.warning(f'Model {AVAILABLE_MODELS[self.current_model_index]} is throttled. Trying next model...')
                 self.current_model_index += 1
                 if self.current_model_index >= len(AVAILABLE_MODELS):
                     raise Exception('All models are throttled. Please try again later.')
                 self.model = self._get_model_with_fallback()
                 return self.run(user_prompt, chat_history, context)
+            else:
+                raise e
+        except Exception as e:
             raise e
 
 def truncate_name(name: str, max_length: int = 40) -> str:
