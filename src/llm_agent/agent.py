@@ -1,34 +1,32 @@
 import streamlit as st
 import os
 from typing import List, Union, Dict
-from langchain.agents import AgentExecutor, create_structured_chat_agent
-from langchain.agents.output_parsers import JSONAgentOutputParser
 from langchain_core.messages import AIMessage, HumanMessage
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 from langchain_core.tools import ToolsRenderer, render_text_description_and_args
-from langchain.agents.format_scratchpad import format_xml
 import json
 from datetime import datetime
 from langchain.callbacks.base import BaseCallbackHandler
 from langchain.callbacks.streaming_stdout import StreamingStdOutCallbackHandler
 
-from llm_agent.config import get_model, get_tools, AVAILABLE_MODELS, AVAILABLE_TOOLS
+from llm_agent.config import get_model, get_tools, AVAILABLE_MODELS, AVAILABLE_TOOLS, MODEL_CONFIGS
 from utils.file_utils import get_combined_file_contents, count_tokens, get_file_tree
 from streamlit_tree_select import tree_select
 from llm_agent.token_cost_tracker import TokenCostTracker
 
 
 class LLMAgent:
-    def __init__(self, model_id, aws_profile):
+    def __init__(self, model_id, aws_profile, thinking_mode):
         self.aws_profile = aws_profile
         self.current_model_index = AVAILABLE_MODELS.index(model_id)
+        self.thinking_mode = thinking_mode
         self.model = self._get_model_with_fallback()
         self.token_tracker = TokenCostTracker(model_id)
 
     def _get_model_with_fallback(self):
         while self.current_model_index < len(AVAILABLE_MODELS):
             try:
-                model = get_model(AVAILABLE_MODELS[self.current_model_index], self.aws_profile)
+                model = get_model(AVAILABLE_MODELS[self.current_model_index], self.aws_profile, self.thinking_mode)
                 return model
             except Exception as e:
                 if 'ThrottlingException' in str(e):
@@ -68,21 +66,39 @@ class LLMAgent:
             input_tokens = count_tokens(input_text)
             self.token_tracker.add_input_tokens(input_tokens)
 
-            # Create a container for streaming output
-            container = st.empty()
+            # Create containers for streaming output
+            if self.thinking_mode:
+                thinking_container = st.expander("Thinking...", expanded=False)
+                thinking_placeholder = thinking_container.empty()  # Create once
+                thinking_text = ""
+            response_container = st.empty()
+
+            thinking_text = ""
             response_text = ""
             
             for chunk in self.model.stream(messages):
                 if chunk.content:
-                    response_text += chunk.content
-                    # Update the container with accumulated text
-                    container.markdown(response_text + "▌")
+                    if self.thinking_mode:
+                        if chunk.content[0]['type'] == 'thinking':
+                            if 'thinking' in chunk.content[0]:
+                                thinking_text += chunk.content[0]['thinking']
+                                thinking_placeholder.markdown(thinking_text + "▌")
+                        elif chunk.content[0]['type'] == 'text':
+                            if 'text' in chunk.content[0]:
+                                response_text += chunk.content[0]['text']
+                                response_container.markdown(response_text + "▌")
+                    else:
+                        response_text += chunk.content
+                        # Update the container with accumulated text
+                        response_container.markdown(response_text + "▌")
 
             # Final update without cursor
-            container.markdown(response_text)
+            response_container.markdown(response_text)
 
             # Count output tokens
             output_tokens = count_tokens(response_text)
+            if thinking_text:
+                output_tokens += count_tokens(thinking_text)
             self.token_tracker.add_output_tokens(output_tokens)
 
             return response_text
@@ -109,7 +125,10 @@ class LLMAgent:
                 """
                 st.error(error_message)
                 return "ExpiredTokenException"
-            elif 'ThrottlingException' in str(e):
+            else:
+                raise e
+        except Exception as e:
+            if 'ThrottlingException' in str(e):
                 st.warning(f'Model {AVAILABLE_MODELS[self.current_model_index]} is throttled. Trying next model...')
                 self.current_model_index += 1
                 if self.current_model_index >= len(AVAILABLE_MODELS):
@@ -118,8 +137,6 @@ class LLMAgent:
                 return self.run(user_prompt, chat_history, context)
             else:
                 raise e
-        except Exception as e:
-            raise e
 
 def truncate_name(name: str, max_length: int = 40) -> str:
     """Truncate filename if it's too long"""
@@ -254,6 +271,8 @@ def main():
         st.session_state.aws_profile = ""
     if "model_id" not in st.session_state:
         st.session_state.model_id = AVAILABLE_MODELS[0]
+    if "thinking_mode" not in st.session_state:
+        st.session_state.thinking_mode = False
     if "selected_files" not in st.session_state:
         st.session_state.selected_files = []
     if "folder_paths" not in st.session_state:
@@ -306,7 +325,7 @@ def main():
         st.session_state.token_tracker = TokenCostTracker(st.session_state.model_id)
 
     # Initialize agent
-    agent = LLMAgent(st.session_state.model_id, st.session_state.aws_profile)
+    agent = LLMAgent(st.session_state.model_id, st.session_state.aws_profile, st.session_state.thinking_mode)
     agent.token_tracker = st.session_state.token_tracker  # Use the session state tracker
 
     # Sidebar
@@ -315,6 +334,17 @@ def main():
         st.session_state.aws_profile = st.text_input("AWS Profile", value=st.session_state.aws_profile)
         st.session_state.model_id = st.selectbox("Select Model", AVAILABLE_MODELS,
                                                 index=AVAILABLE_MODELS.index(st.session_state.model_id))
+        model_config = MODEL_CONFIGS.get(st.session_state.model_id, MODEL_CONFIGS["default"])
+
+        # Show thinking mode toggle only for supported models
+        if model_config["supports_thinking"]:
+            st.session_state.thinking_mode = st.toggle("Enable Thinking Mode",
+                                                      value=st.session_state.thinking_mode,
+                                                      help="Enables advanced thinking capabilities with larger context window")
+
+        agent.aws_profile = st.session_state.aws_profile
+        agent.current_model_index = st.session_state.model_id
+        agent.thinking_mode = st.session_state.thinking_mode
 
         # File Tree Section
         st.header(":file_folder: Code Context")

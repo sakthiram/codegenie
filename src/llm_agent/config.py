@@ -6,6 +6,7 @@ from langchain.tools import Tool
 from langchain_community.tools.tavily_search.tool import TavilySearchResults
 
 AVAILABLE_MODELS = [
+    "us.anthropic.claude-3-7-sonnet-20250219-v1:0",
     "us.anthropic.claude-3-5-sonnet-20241022-v2:0",
     "us.anthropic.claude-3-5-haiku-20241022-v1:0",
     "anthropic.claude-3-5-sonnet-20240620-v1:0",
@@ -13,6 +14,29 @@ AVAILABLE_MODELS = [
     "anthropic.claude-3-haiku-20240307-v1:0",
     "anthropic.claude-3-opus-20240229-v1:0"
 ]
+
+MODEL_CONFIGS = {
+    "us.anthropic.claude-3-7-sonnet-20250219-v1:0": {
+        "supports_thinking": True,
+        "normal_mode": {
+            "max_tokens": 8192,
+            "temperature": 0.3,
+            "top_k": 15
+        },
+        "thinking_mode": {
+            "max_tokens": 64000,
+            "thinking_tokens": 32000
+        }
+    },
+    "default": {
+        "supports_thinking": False,
+        "normal_mode": {
+            "max_tokens": 8192,
+            "temperature": 0.3,
+            "top_k": 15
+        }
+    }
+}
 
 MODEL_PRICING = {
     "us.anthropic.claude-3-5-sonnet-20241022-v2:0": {
@@ -43,10 +67,28 @@ MODEL_PRICING = {
 
 AVAILABLE_TOOLS = ['tavily_search']
 
-def get_model(model_id, aws_profile=None):
+def get_model(model_id, aws_profile=None, thinking_mode=False):
+    model_config = MODEL_CONFIGS.get(model_id, MODEL_CONFIGS["default"])
+
+    if thinking_mode and model_config["supports_thinking"]:
+        # Thinking mode configuration
+        model_kwargs = {
+            "max_tokens": model_config["thinking_mode"]["max_tokens"],
+            "thinking": {
+                "type": "enabled",
+                "budget_tokens": model_config["thinking_mode"]["thinking_tokens"]
+            }
+        }
+    else:
+        # Normal mode configuration
+        model_kwargs = {
+            "max_tokens": model_config["normal_mode"]["max_tokens"],
+            "temperature": model_config["normal_mode"]["temperature"],
+            "top_k": model_config["normal_mode"]["top_k"]
+        }
     return ChatBedrock(
         model_id=model_id,
-        model_kwargs={"max_tokens": 8192, "temperature": 0.3, "top_k": 15},
+        model_kwargs=model_kwargs,
         credentials_profile_name=aws_profile if aws_profile else None,
         config=Config(read_timeout=900)
     )

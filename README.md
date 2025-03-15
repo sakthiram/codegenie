@@ -8,6 +8,12 @@ AI agent for assisting developers
 - Using langchain's structured chat agent to constrain agent outputs for multi agent or agent tool collaboration
 - Streamlit callback used to stream intermediate steps
 
+### Claude 3.7 extended thinking support
+References:
+- https://docs.anthropic.com/en/docs/about-claude/models/extended-thinking-models
+- https://docs.anthropic.com/en/docs/about-claude/models/all-models#model-comparison
+
+
 ## Development
 ### Building & Running
 1. `cd codegenie`
